@@ -1,0 +1,215 @@
+---
+title: "Sales August"
+author: "Daniel Obare"
+date: "2/4/2020"
+output: html_document
+---
+
+
+# knitr setup
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      message = FALSE)
+```
+
+
+# Load required packages
+```{r}
+require(magrittr)
+require(dplyr)
+require(tidyr)
+require(ggplot2)
+require(lubridate)
+require(ggthemes)
+require(stringr)
+theme_set(theme_minimal())
+load(file = "sales.Rdata")
+```
+
+
+```{r}
+#check dimensions of the sales data
+dim(Sales_August)
+
+# select certain columns to omit
+sales <- Sales_August %>% select(-c(`Organization`, `Previous Account Number`, `Date of Repossession (UTC)`, 
+                                   `Customer Age`, `Customer Region`, `Customer Occupation`, 
+                                   `Customer Affiliation`, `Customer ID`, `Keycodes Remaining`, 
+                                   `Greenlight Planet DTV Kenya Account Number`,`CAS ID` ,
+                                   `Client Photo_`, `Client's location`, `Contract Serial Number`,
+                                   `Customer ID Photo_`, `Customer ID Photo`, `Owner Location`, `Country`,
+                                   `CI Serial No.`, `Contract Picture`, `Directions to your house?`, 
+                                   `Do you have Stima?_`, `Does the client have a bank account?_`,
+                                   `Does the client’s family living in the house own a motorcycle or other motorized vehicle?_`,
+                                   `Does your Roofing has a fasciaboard?`, `Does your household have a radio?`, 
+                                   `Does your household have a radio?_`, `EO to be assigned`,
+                                   `Endless Notebook Account Number`,
+                                   `Gender`, `Has the client taken a loan before?_`,
+                                   `How far do you live from the shop?`,
+                                   `How is the customer related to the owner of Secondary Telephone Number?`,
+                                   `How many bedrooms does your house have?`, `How many children do you have?`,
+                                   `How many family members sleep in this household?`, `Installer User Name`,
+                                   `Installer User Name`, `Is the client the main user?`,
+                                   `Is the client the main user?_`,
+                                   `MiniPC Serial`, `Next of Kin / Referee name`, 
+                                   `Next of Kin / Referee phone number`, 
+                                   `Next of Kin / Referee Idenfication Number`, `Physical Location`, 
+                                   `Pre-Upgrade Angaza ID`,
+                                   `Relationship of the customer to the next of kin`, 
+                                   `Repossession Notification`, 
+                                   `Secondary Telephone Number_`, 
+                                   `Upload signed check-list by customer for cross-sales`,
+                                   `What is the client's Primary source of income?`, `Client Photo`,
+                                   `What is the client’s family monthly income?_`, `Customer ID number photo`,
+                                   `What is the main material of the floor of your household?`,
+                                   `What is the main material of the roof of your household?`,
+                                   `What type of roofing is in your house?`, 
+                                   `When are you ready to buy the Product?`,
+                                   `Which Material has your house been build with?`, `Zuku Account Number`,
+                                   `Date of Write-Off`, `Additional Unit Numbers`, 
+                                   `Remetered By Angaza Account ID`,
+                                   `Secondary Responsible User Angaza ID`, `Secondary Responsible User`,
+                                   `Does the client rent or own their home?_`, `Keypad Account Angaza ID`,
+                                   `Registration Location (latitude,longitude)`, `Registration Date (UTC)`,
+                                   `Responsible User Since`,`Secondary Telephone Number`, 
+                                   `Unit Location (latitude,longitude)`, `Unit Location Last Updated (UTC)`,
+                                   `Unlock Price At Registration`, `Responsible User`,
+                                   `Which Constituency does the client come from?`,
+                                   `Which Constituency does the client come from?`, 
+                                   `Which sub-location does the client come from?`,
+                                   `What is the name of your village?`, 
+                                   `What is your nearest landmark or name of nearest school around you?`,
+                                   `Responsible User Angaza ID`, `Repayment Risk`,
+                                   `Which location does the client come from?`,
+                                   `Products`)) %>% 
+     # rename column names                               
+  rename(agent_name = `Registering User`, agent_id = `Registering User Angaza ID`, client_tel = `Owner MSISDN`, 
+         client_name = `Owner Name`, client_gender = `Customer Gender`, client_id_number = `Customer ID number`,
+         power_availability = `Do you have Stima?`, kerosen_paraffin_usage = `Do you use Kerosene/Paraffin now?`,
+         bank_acc = `Does the client have a bank account?`, home_ownership = `Does the client rent or own their home?`,
+         automobile_ownership = `Does the client’s family living in the house own a motorcycle or other motorized vehicle?`,
+         county = `Which County does the client come from?`, ever_loaned = `Has the client taken a loan before?`,
+         family_members = `How many family members live in the client’s house?`, deadline = `Date of Latest Payment (UTC)`,
+         client_income = `What is the client's primary source of income?_`, 
+         family_income =`What is the client’s family monthly income?`, usage = `Where is the product used?`) %>%
+    janitor::clean_names() # cleaning the names for easier identification 
+
+complete.sales <- sales[which(complete.cases(sales)), ] # filter out missing values
+
+# feature engineering icludes changing data types add columns work with strings
+x <- complete.sales %>%  mutate(account_status = factor(account_status)) %>% 
+  separate(col =  agent_name, into = c("agent_name", "ps"), sep = "[:punct:]") %>% 
+  select(-ps) %>% 
+  mutate(deadline = ymd_hms(deadline)) %>% 
+  mutate(date_of_disablement_utc = ymd_hms(date_of_disablement_utc)) %>%
+  mutate(client_gender = factor(client_gender)) %>% 
+  mutate(power_availability = factor(power_availability)) %>%
+  mutate(kerosen_paraffin_usage = factor(kerosen_paraffin_usage)) %>% 
+  mutate(bank_acc = factor(bank_acc)) %>% 
+  mutate(home_ownership = factor(home_ownership)) %>%
+  mutate(automobile_ownership = factor(automobile_ownership)) %>%
+  mutate(marital_status = factor(marital_status)) %>% 
+  mutate(client_income = factor(client_income)) %>% 
+  mutate(ever_loaned = factor(ever_loaned)) %>% 
+  mutate(usage = factor(usage)) %>% 
+  mutate(family_income = str_replace(family_income, "Less[:space:]than", "Below")) %>% 
+  mutate(family_income = str_replace(family_income, "\\/=", " ")) %>% 
+  mutate(family_income = str_replace(family_income, "Between", " ")) %>% 
+  mutate(family_income = str_replace(family_income, "and", "-")) %>% 
+  mutate(family_income = factor(family_income)) %>% 
+  mutate(family_members = factor(family_members)) %>% 
+  mutate(product_name = factor(product_name)) %>% 
+  mutate(group_name = factor(group_name)) %>% 
+  mutate(text = paste("A/C: ", account_number, "\nGroup: ", group_name, "\nA/C status: ", account_status,
+                      "\nAgent: ", agent_name, "\nAmount paid: ", total_paid, "\nExpected pay:", expected_paid,
+                      "\nProduct name: ", product_name)) %>% 
+  select(-client_id_number) %>% 
+  janitor::clean_names()
+
+attach(x)
+
+```
+
+
+```{r}
+client.details <-x %>% select(7:36) %>% arrange(total_paid) %>% 
+  mutate(summaries = paste("Name: ", client_name, "\nProduct: ", product_name, "\nTotal paid: ",
+                           total_paid, "\nBalance: ", amount_in_arrears, "\nExpected pay:",
+                           expected_paid))
+```
+
+
+
+```{r}
+agent.details <- x %>% select(1:16,21:23,37,38) %>% arrange(agent_id)
+```
+
+
+
+```{r}
+#histogram
+hist(total_paid, col = "grey")
+hist(expected_paid, col = "grey")
+
+ x %>% ggplot(aes(total_paid, expected_paid))+
+   geom_point()
+ 
+ x %>% ggplot(aes(total_paid, col = product_name))+
+   geom_freqpoly()
+ 
+ 
+ x %>% ggplot(aes(expected_paid, col = product_name))+
+   geom_freqpoly()
+ 
+ 
+ 
+```
+
+
+```{r}
+
+x %>% ggplot(aes(power_availability, fill = product_name))+
+  geom_bar(position = "dodge")
+
+x %>% ggplot(aes(kerosen_paraffin_usage, fill = product_name))+
+  geom_bar(position = "dodge")
+
+x %>% ggplot(aes(kerosen_paraffin_usage, fill = product_name))+
+  geom_bar(position = "dodge")+
+  facet_wrap(~power_availability)
+
+x %>% ggplot(aes(bank_acc, fill = product_name))+
+  geom_bar(position = "dodge")
+
+x %>% ggplot(aes(home_ownership, fill = product_name))+
+  geom_bar(position = "dodge")
+
+x %>% ggplot(aes(automobile_ownership, fill = product_name))+
+  geom_bar(position = "dodge")
+
+x %>% ggplot(aes(ever_loaned, fill = product_name))+
+  geom_bar( position = "dodge")
+
+x %>% ggplot(aes(client_income, fill = product_name))+
+  geom_bar( position = "dodge")+ coord_flip()
+
+x %>% ggplot(aes(family_income, fill = product_name))+
+  geom_bar( position = "dodge")+ coord_flip()
+
+x %>% ggplot(aes(usage, fill = product_name))+
+  geom_bar( position = "dodge")
+
+x %>% ggplot(aes(client_income, fill = product_name))+
+  geom_bar(position = "dodge")+
+  facet_wrap(~family_income)+
+  coord_flip()
+
+x %>% ggplot(aes(power_availability, fill = product_name))+
+  geom_bar(position = "dodge")+
+  facet_wrap(~family_income)+
+  coord_flip()
+
+```
+
