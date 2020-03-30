@@ -1,0 +1,176 @@
+---
+title: "Sales Between 2018 - 2019"
+author: "Daniel Obare"
+date: "3/4/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+```{r}
+require(magrittr) #piping operator %>% 
+require(dplyr) #data cleaning
+require(tidyr) #wranglng
+require(stringr) #strings
+require(ggplot2) #plots
+theme_set(theme_minimal())
+load(file = "combossales.Rdata")
+```
+
+```{r}
+colSums(is.na(analysis.2018))
+sales.2018 <- analysis.2018[which(complete.cases(analysis.2018)), ]
+
+y <- sales.2018 %>% gather(key = "kerosene", value = "kerosene.users", c(8,9)) %>% 
+  gather(key = "bank", value = "bank.users", c(8,9)) %>%
+  gather(key = "home,ownership", value = "home.stats", c(8,9)) %>%
+  gather(key = "automobile", value = "motor.stats", c(8,9)) %>%
+  gather(key = "gender", value = "gender.stats", c(8,9)) %>% 
+  gather(key = "income", value = "income.stats", c(8:10)) %>% 
+  gather(key = "stima", value = "stima.users", c(8,9))
+
+
+
+
+```
+
+
+
+
+```{r 2019}
+attach(analysis.2019)
+normalize <- function(x){
+  return((x-min(x))/(max(x)-min(x)))
+}
+
+x <- analysis.2019 %>% select(4:22) %>% normalize()
+
+y <- as.data.frame(lapply(analysis.2019[ ,4:22], normalize))
+
+
+
+set.seed(4321)
+index <- sample(1:nrow(y), 0.8*nrow(y))
+
+train <- y[index, ]
+test <- y[-index, ]
+
+fit1 <- lm(Number.of.units.sold~., data = train)
+s1 <- summary(fit1)
+pred <- predict(fit1, test)
+act_pred <- data.frame(cbind(actuals = test$Number.of.units.sold, predicted = pred))
+corretaion_accuracy.1 <- cor(act_pred)
+min_max_accuracy.1 <- mean(apply(act_pred, 1, min)/apply(act_pred, 1, max))
+
+
+fit2 <- lm(Number.of.units.sold~Month+Revenue+KEROSENE.YES+KEROSENE.NO+Bank.account.YES+Bank.account.NO
+           +Does.the.client.Rent+Does.the.client.own.their.home+own.a.motorcycle.or.other.motorized.vehicle..YES
+           +Stima.YES+Class, data = train)
+
+s2 <- summary(fit2)
+pred <- predict(fit2, test)
+act_pred <- data.frame(cbind(actuals = test$Number.of.units.sold, predicted = pred))
+corretaion_accuracy.2 <- cor(act_pred)
+min_max_accuracy.2 <- mean(apply(act_pred, 1, min)/apply(act_pred, 1, max))
+
+
+
+fit3 <- lm(Number.of.units.sold~Month+Revenue
+            Does.the.client.Rent+Does.the.client.own.their.home, data = train)
+
+s3 <- summary(fit3)
+pred <- predict(fit3, test)
+act_pred <- data.frame(cbind(actuals = test$Number.of.units.sold, predicted = pred))
+corretaion_accuracy.3 <- cor(act_pred)
+min_max_accuracy.3 <- mean(apply(act_pred, 1, min)/apply(act_pred, 1, max))
+
+
+fit5 <- lm(Number.of.units.sold~Month+Revenue+KEROSENE.YES+Bank.account.NO+income.less.than.10.000+Class+Stima.YES, 
+           data = train)
+s5 <- summary(fit5)
+
+pred <- predict(fit5, test)
+act_pred <- data.frame(cbind(actuals = test$Number.of.units.sold, predicted = pred))
+corretaion_accuracy <- cor(act_pred)
+min_max_accuracy <- mean(apply(act_pred, 1, min)/apply(act_pred, 1, max))
+
+
+#HOW WELL DOES MODEL FIT DATA
+
+abline(fit2)
+
+y %>% ggplot(aes(fit2$residuals))+
+  geom_histogram(binwidth = 1, fill = "grey")+
+  theme(panel.background = element_rect(fill = "white"), axis.line.x = element_line(), 
+        axis.line.y = element_line())+
+  ggtitle("Histogram for model residuals")
+
+
+```
+
+
+
+
+
+
+
+```{r}
+ggplot(analysis.2019, aes(Month, Number.of.units.sold))+geom_bar(stat = "identity")+coord_flip()
+ggplot(analysis.2019, aes(Month, Number.of.units.sold, fill = Product.Name))+geom_bar(stat = "identity", position = "dodge")+coord_flip()
+
+ggplot(analysis.2019, aes(Month, Number.of.units.sold))+geom_bar(stat = "identity")+coord_flip()+facet_wrap(~Product.Name)
+
+ggplot(analysis.2019, aes(Month, Number.of.units.sold))+geom_bar(stat = "identity")+facet_wrap(~Product.Name)+coord_flip()
+
+
+normalize <- function(x){
+  return((x-min(x))/(max(x)-min(x)))
+}
+
+ggplot(analysis.2019, aes(normalize(Revenue), normalize(Number.of.units.sold), col = Product.Name))+geom_point()
+```
+
+
+```{r}
+ggplot(analysis.2019, aes(normalize(Revenue), normalize(Number.of.units.sold)))+geom_point()+facet_wrap(~Product.Name)
+
+ggplot(analysis.2019, aes(normalize(Revenue), normalize(Number.of.units.sold), col = Product.Name))+geom_line()
+
+ggplot(analysis.2019, aes(normalize(KEROSENE.YES), normalize(Number.of.units.sold), col = Product.Name))+geom_point()
+
+ggplot(analysis.2019, aes(normalize(KEROSENE.YES), normalize(Number.of.units.sold)))+geom_point()+facet_wrap(~Product.Name)
+
+ggplot(analysis.2019, aes(normalize(KEROSENE.NO), normalize(Number.of.units.sold)))+geom_point()+facet_wrap(~Product.Name)
+
+ggplot(analysis.2019, aes(normalize(Bank.account.NO), normalize(Number.of.units.sold)))+geom_point()+facet_wrap(~Product.Name)
+
+ggplot(analysis.2019, aes(normalize(Bank.account.YES), normalize(Number.of.units.sold)))+geom_point()+facet_wrap(~Product.Name)
+
+ggplot(analysis.2019, aes(normalize(Does.the.client.own.their.home), normalize(Number.of.units.sold)))+geom_point()+facet_wrap(~Product.Name)
+
+ggplot(analysis.2019, aes(normalize(Does.the.client.Rent), normalize(Number.of.units.sold)))+geom_point()+facet_wrap(~Product.Name)
+
+ggplot(analysis.2019, aes(normalize(income.above.30.000), normalize(Number.of.units.sold)))+geom_point()+facet_wrap(~Product.Name)
+
+ggplot(analysis.2019, aes(normalize(income.between.10.000.and.30.000), normalize(Number.of.units.sold)))+geom_point()+facet_wrap(~Product.Name)
+
+ggplot(analysis.2019, aes(normalize(income.less.than.10.000), normalize(Number.of.units.sold)))+geom_point()+facet_wrap(~Product.Name)
+
+ggplot(analysis.2019, aes(Group.Name, normalize(Number.of.units.sold), fill = Product.Name))+geom_bar(position = "dodge", stat = "identity")+coord_flip()
+
+table(analysis.2019$Group.Name, analysis.2019$Product.Name) %>% kableExtra::kable() %>% kableExtra::kable_styling()
+
+
+```
+
+```{r}
+trees %>% ggplot(aes_all(Girth, Volume))+
+  geom_point()+
+  stat_smooth(method = "lm", col = "dodgerblue3")+
+  theme(panel.background = element_rect(fill = "white"),  axis.line.x = element_line(), axis.line.y = element_line())+
+  ggtitle("Linear model fitted to data")
+```
+
+

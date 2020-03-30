@@ -1,0 +1,276 @@
+---
+title: "Combined Normalized Sales between 2018-19 for D-light bulbs"
+author: "Daniel Obare"
+date: "3/14/2020"
+output: html_document
+    
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# **Objective** 
+
+## create a model that **predicts** sales for the D-light bulbs
+
+Provided the data for sales of the D-light with various variables in play we model an **lm**
+model to predict the sales for products
+
+
+# package loading and data wrangling
+
+Incudes checking for **NA's** and changing **data types** as well as cleaning the names
+
+```{r}
+require(magrittr) #piping operator 
+require(dplyr) #data cleaning
+require(tidyr) #wranglng
+require(stringr) #strings
+require(ggplot2) #plots
+theme_set(theme_minimal())
+load(file = "normalized.Rdata")
+```
+
+
+```{r}
+normalize <- function(x) {
+  return((x-min(x))/(max(x)-min(x)))
+}
+
+attach(comined_normalized)
+
+colSums(is.na(comined_normalized))
+
+normalized.sales <- comined_normalized %>%select(-Month) %>%  mutate(Quarter = factor(Quarter)) %>% 
+  mutate(`Group Name` = factor(`Group Name`)) %>% mutate(`Product Name` = factor(`Product Name`)) %>% 
+  mutate(`Group Name` = factor(`Group Name`)) %>% mutate(`Product Name` = factor(`Product Name`)) %>% 
+  mutate(Class = factor(Class)) %>% 
+  mutate(Revenue = normalize(Revenue)) %>%  mutate(`Unlock Price` = normalize(`Unlock Price`)) %>%
+  mutate(X7 = normalize(X7)) %>% mutate(`income above 30,000` = as.numeric(`income above 30,000`)) %>% 
+  mutate(`Upfront Price` = normalize(`Upfront Price`)) %>% 
+  mutate(`Number of sales` = normalize(`Number of sales`)) %>% 
+  janitor::clean_names()
+
+```
+
+# Model Fitting
+
+## Normalizing and Sampling data
+
+```{r}
+
+attach(normalized.sales)
+set.seed(4321)
+index <- sample(1:nrow(normalized.sales), 0.8*nrow(normalized.sales))
+train <- normalized.sales[index, ]
+test <- normalized.sales[-index, ]
+
+train <- train[which(complete.cases(train)), ]
+
+```
+
+## model only numerical data with Quarters 
+
+
+```{r}
+
+fit <- lm(number_of_sales~quarter+x7+revenue+kerosene_no+kerosene_yes+
+            bank_account_no+bank_account_yes+does_the_client_own_their_home+does_the_client_rent+
+            own_a_motorcycle_or_other_motorized_vehicle_no+own_a_motorcycle_or_other_motorized_vehicle_yes+
+            gender_female+gender_male+income_above_30_000+income_between_10_000_and_30_000+
+            income_less_than_10_000+stima_no+stima_yes+class, data = train)
+AIC(fit)
+BIC(fit)
+s <- summary(fit)
+pred <- predict(fit, test)
+act_pred <- data.frame(cbind(actuals = test$number_of_sales, predicted = pred))
+min_max_acc <- mean(apply(act_pred, 1, min)/apply(act_pred, 1, max))
+```
+
+## Model of the whole data
+
+```{r}
+fit1 <- lm(number_of_sales~., data = train)
+AIC(fit1)
+BIC(fit1)
+s1 <- summary(fit1)
+pred.1 <- predict(fit1, test)
+act_pred.1 <- data.frame(cbind(actuals = test$number_of_sales, predicted = pred.1))
+min_max_acc.1 <- mean(apply(act_pred.1, 1, min)/apply(act_pred.1, 1, max))
+```
+
+## Second Revised Model
+
+```{r}
+
+fit2 <- lm(number_of_sales~quarter+group_name+x7+revenue+kerosene_no+does_the_client_rent+does_the_client_own_their_home+
+             gender_male+income_less_than_10_000+income_between_10_000_and_30_000+income_above_30_000+stima_yes, 
+           data = train)
+AIC(fit2)
+BIC(fit2)
+s2 <- summary(fit2)
+pred.2 <- predict(fit2, test)
+act_pred.2 <- data.frame(cbind(actuals = test$number_of_sales, predicted = pred.2))
+min_max_acc.2 <- mean(apply(act_pred.2, 1, min)/apply(act_pred.2, 1, max))
+```
+
+## Third Revised Model
+
+Check model **diagnostics** to prove it's sufficiency and accuracy
+
+```{r}
+
+fit3 <- lm(number_of_sales~quarter+group_name+x7+revenue+kerosene_no+does_the_client_own_their_home+
+             gender_male+income_less_than_10_000+income_between_10_000_and_30_000+income_above_30_000+stima_yes, 
+           data = train)
+AIC(fit3)
+BIC(fit3)
+s3 <- summary(fit3)
+pred.3 <- predict(fit3, test)
+act_pred.3 <- data.frame(cbind(actuals = test$number_of_sales, predicted = pred.3))
+min_max_acc.3 <- mean(apply(act_pred.3, 1, min)/apply(act_pred.3, 1, max))
+
+```
+
+
+
+## Revised model that provides sufficient evidence for predicton of Sales for Products 
+
+```{r}
+fit4 <- lm(number_of_sales~quarter+x7+revenue+kerosene_no+does_the_client_own_their_home+
+             gender_male+income_less_than_10_000+income_between_10_000_and_30_000+income_above_30_000+stima_yes, 
+           data = train)
+AIC(fit4)
+BIC(fit4)
+s4 <- summary(fit4)
+s4
+pred.4 <- predict(fit4, test)
+act_pred.4 <- data.frame(cbind(actuals = test$number_of_sales, predicted = pred.4))
+min_max_acc.4 <- mean(apply(act_pred.4, 1, min)/apply(act_pred.4, 1, max))
+min_max_acc.4
+
+```
+
+From **fit4** we find sufficient evidence to use this model for prediction:
+     The **R^2** is close to 1 \n
+     **Minimum-maximum accuracy** is approximately **72.7%** which is a bit higher compared to the other models \n
+     The **Arkaike Information Criterion (AIC)** and **Bayesian Information Criterion (BIC)** are very low as well
+
+```{r}
+par(mfrow = c(2,2))
+plot(fit4)
+
+```
+
+From the **residuals plot** points fun out which is a likely indicator that there is a relationship between **predictor** and **response** variable
+There is **normality** aspect evidenced by the normal-QQ plot
+All variables are **significant** evidenced by the significant stars
+
+# Graphical Analysis and Tables of comparison
+
+## Graphical analysis of the Total Combined Sales
+
+```{r}
+combo.sales <- combined_total %>% mutate(Quarter = factor(Quarter)) %>% 
+  mutate(`Product Name` = factor(`Product Name`)) %>%
+  mutate(`Group Name` = factor(`Group Name`)) %>%
+  mutate(`Total sales` = normalize(`Total sales`)) %>% 
+  mutate(`Unlock Price` = normalize(`Unlock Price`)) %>% 
+  mutate(`Total Revenue in Ksh` = normalize(`Total Revenue in Ksh`)) %>% 
+  janitor::clean_names()
+  
+
+table(group_name, product_name) %>% kableExtra::kable() %>% kableExtra::kable_styling()
+
+
+combo.sales %>% ggplot(aes(total_revenue_in_ksh, total_sales, col = product_name, shapes = product_name))+
+  geom_point()+
+  facet_wrap(~group_name)+
+  ggtitle("Total Sales as per Rvenue")
+
+```
+
+## Graphcal analysis of the Total 2018-19 Normalized data
+
+```{r}
+table(product_name, class) %>% kableExtra::kable() %>% kableExtra::kable_styling()
+
+
+normalized.sales %>% ggplot(aes(quarter, number_of_sales))+
+  geom_bar(stat = "identity", fill = "blue")+
+  facet_wrap(~product_name)+ ggtitle("Number of Sales per Quarter in every Product")+
+  xlab("2018-19 Quarters")+ ylab("Number of sales")+coord_flip()
+
+
+
+normalized.sales %>% ggplot(aes(number_of_sales, color = class))+
+  geom_histogram(fill = "white", position = "dodge")+
+  facet_wrap(~product_name)+
+  xlab("Number of Sales")+
+  ggtitle("Sales as per Classes of Product")+
+  theme(legend.position = "top")
+
+
+normalized.sales %>% ggplot(aes(income_less_than_10_000))+
+  geom_histogram(fill = "white", position = "dodge", color = "blue")+
+  facet_wrap(~product_name)+
+  xlab("Income less than 10,000 KShs")+
+  ggtitle("Income less 10,000 KShs as per Product")
+
+
+normalized.sales %>% ggplot(aes(income_between_10_000_and_30_000))+
+  geom_histogram(fill = "white", position = "dodge", color = "purple")+
+  facet_wrap(~product_name)+
+  xlab("Income between 10,000 - 30,000 KShs")+
+  ggtitle("Income between 10,000 - 30,000 KShs as per Product")+
+  theme(legend.position = "top")
+
+
+
+normalized.sales %>% ggplot(aes(income_above_30_000))+
+  geom_histogram(fill = "white", position = "dodge", color = "green")+
+  facet_wrap(~product_name)+
+  xlab("Income above 30,000 KShs")+
+  ggtitle("Income above 30,000 KShs as per Product")+
+  theme(legend.position = "top")
+
+
+normalized.sales %>% ggplot(aes(stima_no))+
+  geom_histogram(fill = "white", position = "dodge", color = "blue")+
+  facet_wrap(~product_name)+
+  xlab("Clients with no Stima")+
+  ggtitle("Clients with no Stima as per Product")+
+  theme(legend.position = "top")
+
+
+normalized.sales %>% ggplot(aes(stima_yes))+
+  geom_histogram(fill = "white", position = "dodge", color = "green")+
+  facet_wrap(~product_name)+
+  xlab("Clients with Stima")+
+  ggtitle("Clients with Stima as per Product")+
+  theme(legend.position = "top")
+
+normalized.sales %>% ggplot(aes(gender_female, number_of_sales))+
+  geom_point(color = "blue")+
+  facet_wrap(~product_name)+
+  xlab("Female Clients")+
+  ylab("Number of Sales")+
+  ggtitle("Female Sales")
+
+normalized.sales %>% ggplot(aes(gender_male, number_of_sales))+
+  geom_point(color = "purple")+
+  facet_wrap(~product_name)+
+  xlab("Male Clients")+
+  ylab("Number of Sales")+
+  ggtitle("Male Sales")
+```
+
+
+
+
+
+
+
+
+
